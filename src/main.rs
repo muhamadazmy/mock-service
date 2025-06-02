@@ -2,7 +2,7 @@ use anyhow::Context;
 use config::{Configuration, StepConfig};
 use mock::{MockHandler, MockService, STEPS};
 use restate_sdk::{
-    discovery::{HandlerName, ServiceName},
+    discovery::{HandlerName, ServiceName, ServiceType},
     prelude::*,
 };
 
@@ -23,13 +23,25 @@ struct Args {
     listen_address: String,
 }
 
-fn step_from_config(step_config: StepConfig) -> anyhow::Result<Box<dyn Step>> {
+fn step_from_config(
+    service_type: ServiceType,
+    step_config: StepConfig,
+) -> anyhow::Result<Box<dyn Step>> {
     let factory = STEPS
         .get(step_config.ty.as_str())
         .with_context(|| format!("Unknown step type: {}", step_config.ty))?;
-    factory
+    let step = factory
         .new(step_config.params)
-        .with_context(|| format!("Failed to create step: {}", step_config.ty))
+        .with_context(|| format!("Failed to create step: {}", step_config.ty))?;
+
+    step.validate(service_type).with_context(|| {
+        format!(
+            "Step {} is not valid for service type {:?}",
+            step_config.ty, service_type
+        )
+    })?;
+
+    Ok(step)
 }
 
 #[tokio::main]
@@ -67,9 +79,11 @@ async fn main() -> anyhow::Result<()> {
             let mut steps: Vec<Box<dyn Step>> = Vec::new();
             for (idx, step_cfg) in handler_config.steps.into_iter().enumerate() {
                 // The `?` operator will convert restate_sdk::Error into Box<dyn std::error::Error>
-                steps.push(step_from_config(step_cfg).with_context(|| {
-                    format!("Failed to create step {idx} for handler {handler_name}")
-                })?);
+                steps.push(
+                    step_from_config(service_config.ty, step_cfg).with_context(|| {
+                        format!("Failed to create step {idx} for handler {handler_name}")
+                    })?,
+                );
             }
 
             let handler_name = HandlerName::from_str(&handler_name)

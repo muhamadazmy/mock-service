@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use restate_sdk::serde::Serialize;
 
 use super::JsonValue;
 
@@ -28,13 +27,16 @@ impl ExecutionContext {
         self.variables.insert(name.to_owned(), value.into());
     }
 
-    pub fn get<T: TryFrom<Variable, Error = VariableError>>(
-        &self,
-        name: &str,
-    ) -> Option<Result<T, VariableError>> {
-        let v = self.variables.get(name)?;
+    pub fn get<T>(&self, name: &str) -> Option<Result<T, VariableError>>
+    where
+        T: TryFrom<Variable, Error = VariableError>,
+    {
+        let value = self.variables.get(name).cloned()?;
+        if let Variable::Null = value {
+            return None;
+        }
 
-        Some(T::try_from(v.clone()))
+        Some(T::try_from(value))
     }
 
     pub fn get_variable(&self, name: &str) -> Option<&Variable> {

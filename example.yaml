@@ -7,3 +7,48 @@ echo:
           params:
             duration: 2s
         - type: echo
+random:
+  type: VIRTUAL_OBJECT
+  handlers:
+    random:
+      steps:
+        - type: random
+          params:
+            size: 50
+            output: random_bytes
+        - type: set
+          params:
+            key: my_key
+            input: random_bytes
+        - type: return
+          params:
+            output: random_bytes
+    get:
+      steps:
+        - type: get
+          params:
+            key: my_key
+            output: random_bytes
+        - type: return
+          params:
+            output: random_bytes
+counter:
+  type: VIRTUAL_OBJECT
+  handlers:
+    counter:
+      steps:
+        - type: get
+          params:
+            key: counter
+            output: my_key
+        - type: increment
+          params:
+            input: my_key
+            steps: 1
+        - type: set
+          params:
+            key: counter
+            input: my_key
+        - type: return
+          params:
+            output: my_key

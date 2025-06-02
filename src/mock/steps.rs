@@ -1,11 +1,14 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use rand::{Rng, RngCore};
+use anyhow::Context;
+use rand::Rng;
 use restate_sdk::{discovery::ServiceType, prelude::*};
 use serde::Deserialize;
 use serde_with::serde_as;
 
-use super::{BoxStep, ExecutionContext, JsonValue, Step, StepError, StepFactory};
+use super::{
+    context::Variable, BoxStep, ExecutionContext, JsonValue, Step, StepError, StepFactory,
+};
 
 pub static STEPS: LazyLock<HashMap<String, Box<dyn StepFactory>>> = LazyLock::new(|| {
     let mut steps: HashMap<String, Box<dyn StepFactory>> = HashMap::default();
@@ -13,7 +16,9 @@ pub static STEPS: LazyLock<HashMap<String, Box<dyn StepFactory>>> = LazyLock::ne
     steps.insert("echo".to_owned(), Box::new(Echo));
     steps.insert("sleep".to_owned(), Box::new(Sleep));
     steps.insert("set".to_owned(), Box::new(Set));
+    steps.insert("get".to_owned(), Box::new(Get));
     steps.insert("random".to_owned(), Box::new(Random));
+    steps.insert("increment".to_owned(), Box::new(Increment));
     steps.insert("return".to_owned(), Box::new(Return));
 
     steps
@@ -83,19 +88,19 @@ struct Set;
 
 impl StepFactory for Set {
     fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
-        let step: SetVariableStep = serde_yaml::from_value(params)?;
+        let step: SetStep = serde_yaml::from_value(params)?;
         Ok(Box::new(step))
     }
 }
 
 #[derive(Debug, Deserialize)]
-struct SetVariableStep {
+struct SetStep {
     key: String,
     input: String,
 }
 
 #[async_trait::async_trait]
-impl Step for SetVariableStep {
+impl Step for SetStep {
     fn validate(&self, service_type: ServiceType) -> Result<(), StepError> {
         if service_type == ServiceType::Service {
             return Err(StepError::InvalidServiceType(service_type));
@@ -116,6 +121,45 @@ impl Step for SetVariableStep {
                 .ok_or_else(|| TerminalError::new(format!("unkown variable {}", self.input)))?
                 .clone(),
         );
+
+        Ok(())
+    }
+}
+
+struct Get;
+
+impl StepFactory for Get {
+    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+        let step: GetStep = serde_yaml::from_value(params)?;
+        Ok(Box::new(step))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct GetStep {
+    key: String,
+    output: String,
+}
+
+#[async_trait::async_trait]
+impl Step for GetStep {
+    fn validate(&self, service_type: ServiceType) -> Result<(), StepError> {
+        if service_type == ServiceType::Service {
+            return Err(StepError::InvalidServiceType(service_type));
+        }
+
+        Ok(())
+    }
+
+    async fn run(
+        &self,
+        ctx: &WorkflowContext<'_>,
+        exec: &mut ExecutionContext,
+        _input: &JsonValue,
+    ) -> Result<(), HandlerError> {
+        let value: Variable = ctx.get(&self.key).await?.unwrap_or(Variable::Null);
+
+        exec.set_variable(&self.output, value);
 
         Ok(())
     }
@@ -188,6 +232,51 @@ impl Step for ReturnStep {
             .ok_or_else(|| TerminalError::new(format!("unkown variable {}", self.output)))?;
 
         exec.return_value(JsonValue::try_from(variable.clone())?);
+
+        Ok(())
+    }
+}
+
+struct Increment;
+
+impl StepFactory for Increment {
+    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+        let step: IncrementStep = serde_yaml::from_value(params)?;
+        Ok(Box::new(step))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct IncrementStep {
+    input: String,
+    #[serde(default = "default_steps")]
+    steps: isize,
+}
+
+fn default_steps() -> isize {
+    1
+}
+
+#[async_trait::async_trait]
+impl Step for IncrementStep {
+    fn validate(&self, _service_type: ServiceType) -> Result<(), StepError> {
+        Ok(())
+    }
+
+    async fn run(
+        &self,
+        _ctx: &WorkflowContext<'_>,
+        exec: &mut ExecutionContext,
+        _input: &JsonValue,
+    ) -> Result<(), HandlerError> {
+        let mut value = exec
+            .get::<isize>(&self.input)
+            .unwrap_or(Ok(0))
+            .context("Failed to get variable")?;
+
+        value += self.steps;
+
+        exec.set_variable(&self.input, value);
 
         Ok(())
     }

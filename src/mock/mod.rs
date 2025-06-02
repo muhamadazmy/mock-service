@@ -11,6 +11,7 @@ use restate_sdk::{
     service::{Discoverable, Service, ServiceBoxFuture},
 };
 pub use steps::STEPS;
+use tracing::{debug, info};
 
 mod context;
 mod steps;
@@ -104,6 +105,12 @@ impl Service for MockServiceWrapper {
                     ctx.handler_name(),
                 ));
             };
+
+            debug!(
+                "Running handler {}/{}",
+                ctx.service_name(),
+                ctx.handler_name()
+            );
 
             let (input, metadata) = ctx.input::<JsonValue>().await;
 
