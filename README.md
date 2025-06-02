@@ -88,10 +88,19 @@ Echoes back the input it receives.
 
 ### `sleep`
 
-Pauses execution for a specified duration.
+Pauses execution for a specified duration. This step utilizes the Restate SDK's `ctx.sleep()` method, meaning the sleep is managed by the Restate runtime and is durable. It can be useful for simulating delays that should persist across retries or service restarts.
 
 *   **Params**:
-    *   `duration`: (Required) A human-readable duration string (e.g., `100ms`, `2s`, `1m`).
+    *   `duration`: (Required) The base duration for which to sleep. Parsed from a human-readable string (e.g., `100ms`, `2s`, `1m`).
+    *   `jitter`: (Optional) A factor (e.g., `0.1` for 10%) to add random jitter to the sleep duration. The actual jitter duration will be a random value between `0` and `jitter * duration`. For example, if `duration` is `10s` and `jitter` is `0.1`, an additional random delay between `0s` and `1s` will be added to the base `10s` duration.
+
+### `busy`
+
+Simulates a busy handler by causing the current handler's execution to sleep for a specified duration. Unlike the `sleep` step, this uses `tokio::time::sleep()` and is handled directly within the mock service, not by the Restate runtime. This is useful for simulating CPU-bound work or other synchronous delays within the handler itself, without involving durable Restate timers.
+
+*   **Params**:
+    *   `duration`: (Required) The base duration for which the handler will simulate being busy. Parsed from a human-readable string (e.g., `100ms`, `1s`).
+    *   `jitter`: (Optional) A factor (e.g., `0.1` for 10%) to add random jitter to the busy duration. The actual jitter duration will be a random value between `0` and `jitter * duration`.
 
 ### `set`
 

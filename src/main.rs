@@ -51,6 +51,7 @@ fn step_from_config(
 trait TestVO {
     async fn work() -> HandlerResult<()>;
 }
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();

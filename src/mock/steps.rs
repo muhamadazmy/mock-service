@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, sync::LazyLock, time::Duration};
 
 use anyhow::Context;
 use rand::Rng;
@@ -15,6 +15,7 @@ pub static STEPS: LazyLock<HashMap<String, Box<dyn StepFactory>>> = LazyLock::ne
 
     steps.insert("echo".to_owned(), Box::new(Echo));
     steps.insert("sleep".to_owned(), Box::new(Sleep));
+    steps.insert("busy".to_owned(), Box::new(Busy));
     steps.insert("set".to_owned(), Box::new(Set));
     steps.insert("get".to_owned(), Box::new(Get));
     steps.insert("random".to_owned(), Box::new(Random));
@@ -65,13 +66,20 @@ impl StepFactory for Sleep {
     }
 }
 
-/// A step that pauses execution for a specified duration.
+/// A step that pauses execution for a specified duration. This step utilizes the Restate SDK's
+/// `ctx.sleep()` method, meaning the sleep is managed by the Restate runtime and is durable.
+/// It can be useful for simulating delays that should persist across retries or service restarts.
 #[serde_as]
 #[derive(Debug, Deserialize)]
 pub struct SleepStep {
-    /// The duration for which to sleep. Parsed from a human-readable string like "2s" or "500ms".
+    /// The base duration for which to sleep. Parsed from a human-readable string like "2s" or "500ms".
     #[serde_as(as = "serde_with::DisplayFromStr")]
     duration: humantime::Duration,
+    /// Optional: A factor (0.0 to 1.0) to add random jitter to the sleep duration.
+    /// The actual jitter duration will be a random value between 0 and `jitter * duration`.
+    /// For example, if `duration` is `10s` and `jitter` is `0.1`, an additional random delay
+    /// between `0s` and `1s` will be added.
+    jitter: Option<f32>,
 }
 
 #[async_trait::async_trait]
@@ -86,7 +94,14 @@ impl Step for SleepStep {
         _step: &mut ExecutionContext,
         _input: &JsonValue,
     ) -> Result<(), HandlerError> {
-        ctx.sleep(self.duration.into()).await?;
+        let jitter = self
+            .jitter
+            .map(|j| rand::random_range(0.0..=j) * self.duration.as_secs_f32())
+            .map(Duration::from_secs_f32);
+
+        let duration = Duration::from(self.duration) + jitter.unwrap_or_default();
+
+        ctx.sleep(duration).await?;
 
         Ok(())
     }
@@ -469,6 +484,56 @@ impl Step for SendStep {
             .unwrap_or(Variable::Null);
 
         ctx.request::<_, ()>(request_target, req).send();
+
+        Ok(())
+    }
+}
+
+struct Busy;
+
+impl StepFactory for Busy {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+        let step: BusyStep = serde_yaml::from_value(params)?;
+        Ok(Box::new(step))
+    }
+}
+
+/// A step that simulates a busy handler by causing the current thread to sleep for a specified duration.
+/// Unlike [`SleepStep`], this sleep is handled directly within the mock service using `tokio::time::sleep()`
+/// and is not managed by the Restate runtime. This is useful for simulating CPU-bound work or
+/// other synchronous delays within the handler itself, without involving durable timers.
+#[serde_as]
+#[derive(Debug, Deserialize)]
+struct BusyStep {
+    /// The base duration for which the handler will simulate being busy.
+    /// Parsed from a human-readable string (e.g., "100ms", "1s").
+    #[serde_as(as = "serde_with::DisplayFromStr")]
+    duration: humantime::Duration,
+    /// Optional: A factor (0.0 to 1.0) to add random jitter to the busy duration.
+    /// The actual jitter duration will be a random value between 0 and `jitter * duration`.
+    jitter: Option<f32>,
+}
+
+#[async_trait::async_trait]
+impl Step for BusyStep {
+    fn validate(&self, _service_type: ServiceType) -> Result<(), StepError> {
+        Ok(())
+    }
+
+    async fn run(
+        &self,
+        _ctx: &WorkflowContext<'_>,
+        _exec: &mut ExecutionContext,
+        _input: &JsonValue,
+    ) -> Result<(), HandlerError> {
+        let jitter = self
+            .jitter
+            .map(|j| rand::random_range(0.0..=j) * self.duration.as_secs_f32())
+            .map(Duration::from_secs_f32);
+
+        let duration = Duration::from(self.duration) + jitter.unwrap_or_default();
+
+        tokio::time::sleep(duration).await;
 
         Ok(())
     }
