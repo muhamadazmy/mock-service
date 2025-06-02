@@ -2,12 +2,16 @@ use std::{collections::HashMap, sync::Arc};
 
 use bytes::Bytes;
 use restate_sdk::{
-    discovery::{self, Handler, HandlerName, ServiceName, ServiceType},
+    discovery::{self, Handler, HandlerName, HandlerType, ServiceName, ServiceType},
+    endpoint::Builder,
     errors::HandlerError,
-    prelude::{Context, ContextWriteState, Endpoint, ObjectContext, WorkflowContext},
+    prelude::WorkflowContext,
     serde::{Deserialize, Serialize},
     service::{Discoverable, Service, ServiceBoxFuture},
 };
+pub use steps::STEPS;
+
+mod steps;
 
 tokio::task_local! {
     static DISCOVERY_METADATA: discovery::Service;
@@ -47,8 +51,8 @@ impl MockService {
         }
     }
 
-    pub fn add_handler(&mut self, handler: MockHandler) {
-        self.handlers.insert(handler.name.clone().into(), handler);
+    pub fn add_handler(&mut self, name: HandlerName, handler: MockHandler) {
+        self.handlers.insert(name.to_string(), handler);
     }
 
     fn service_discovery(&self) -> discovery::Service {
@@ -57,18 +61,18 @@ impl MockService {
             handlers: self
                 .handlers
                 .iter()
-                .map(|(name, _)| Handler {
+                .map(|(name, handler)| Handler {
                     name: name.clone().try_into().unwrap(),
                     input: None,
                     output: None,
-                    ty: None,
+                    ty: handler.ty,
                 })
                 .collect(),
             ty: self.ty,
         }
     }
 
-    pub async fn endpoint(self) -> Endpoint {
+    pub async fn bind(self, endpoint: Builder) -> Builder {
         let discovery = self.service_discovery();
 
         let wrapper = MockServiceWrapper {
@@ -76,9 +80,7 @@ impl MockService {
         };
 
         DISCOVERY_METADATA
-            .scope(discovery, async move {
-                Endpoint::builder().bind(wrapper).build()
-            })
+            .scope(discovery, async move { endpoint.bind(wrapper) })
             .await
     }
 }
@@ -140,6 +142,8 @@ impl ExecutionContext {
 pub enum StepError {
     #[error("Invalid service type: {}", .0.to_string())]
     InvalidServiceType(ServiceType),
+    #[error("Invalid step parameters: {0}")]
+    InvalidStepParameters(#[from] serde_yaml::Error),
 }
 
 #[async_trait::async_trait]
@@ -166,27 +170,8 @@ where
 }
 
 pub struct MockHandler {
-    pub name: HandlerName,
     pub steps: Vec<BoxStep>,
-}
-
-pub struct EchoStep;
-
-#[async_trait::async_trait]
-impl Step for EchoStep {
-    fn validate(&self, _service_type: ServiceType) -> Result<(), StepError> {
-        Ok(())
-    }
-
-    async fn run(
-        &self,
-        _ctx: &WorkflowContext<'_>,
-        exec: &mut ExecutionContext,
-        input: &JsonValue,
-    ) -> Result<(), HandlerError> {
-        exec.return_value(input.clone());
-        Ok(())
-    }
+    pub ty: Option<HandlerType>,
 }
 
 impl MockHandler {
@@ -202,4 +187,8 @@ impl MockHandler {
 
         Ok(exec_ctx.ret.unwrap_or(JsonValue(serde_json::Value::Null)))
     }
+}
+
+pub trait StepFactory: Send + Sync + 'static {
+    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError>;
 }

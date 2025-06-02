@@ -3,7 +3,6 @@ counter:
   type: SERVICE
   handlers:
     increment:
-      name: increment
       type: EXCLUSIVE
       steps:
         - type: sleep
@@ -13,7 +12,6 @@ counter:
           params:
             result: 42
     get_count:
-      name: get_count
       type: SHARED
       steps:
         - type: success

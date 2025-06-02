@@ -4,32 +4,31 @@ use restate_sdk::discovery::{HandlerType, ServiceType};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-struct ServiceConfig {
-    name: String,
+pub struct ServiceConfig {
     #[serde(rename = "type")]
-    ty: ServiceType,
-    handlers: HashMap<String, HandlerConfig>,
+    pub ty: ServiceType,
+    pub handlers: HashMap<String, HandlerConfig>,
 }
 
 #[derive(Debug, Deserialize)]
-struct HandlerConfig {
-    name: String,
+pub struct HandlerConfig {
     #[serde(rename = "type")]
-    ty: Option<HandlerType>,
-    steps: Vec<StepConfig>,
+    pub ty: Option<HandlerType>,
+    pub steps: Vec<StepConfig>,
 }
 
 #[derive(Debug, Deserialize)]
-struct StepConfig {
+pub struct StepConfig {
     #[serde(rename = "type")]
-    ty: String,
-    params: serde_yaml::Value,
+    pub ty: String,
+    #[serde(default)]
+    pub params: serde_yaml::Value,
 }
 
 #[derive(Debug, Deserialize)]
-struct Config {
+pub struct Configuration {
     #[serde(flatten)]
-    services: HashMap<String, ServiceConfig>,
+    pub services: HashMap<String, ServiceConfig>,
 }
 
 #[cfg(test)]
@@ -45,7 +44,6 @@ mod tests {
 
         // Test service level configuration
         let counter_service = config.get("counter").unwrap();
-        assert_eq!(counter_service.name, "counter");
         assert_eq!(counter_service.ty, ServiceType::Service);
 
         // Test handlers
@@ -54,13 +52,11 @@ mod tests {
 
         // Test increment handler
         let increment = handlers.get("increment").unwrap();
-        assert_eq!(increment.name, "increment");
         assert_eq!(increment.ty, Some(HandlerType::Exclusive));
         assert_eq!(increment.steps.len(), 2);
 
         // Test get_count handler
         let get_count = handlers.get("get_count").unwrap();
-        assert_eq!(get_count.name, "get_count");
         assert_eq!(get_count.ty, Some(HandlerType::Shared));
         assert_eq!(get_count.steps.len(), 1);
 

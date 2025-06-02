@@ -1,0 +1,9 @@
+echo:
+  type: SERVICE
+  handlers:
+    echo:
+      steps:
+        - type: sleep
+          params:
+            duration: 2s
+        - type: echo

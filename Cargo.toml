@@ -15,3 +15,6 @@ async-trait = "0.1.88"
 anyhow = "1.0.98"
 thiserror = "2.0.12"
 serde_yaml = "0.9.34"
+clap = { version = "4.5.39", features = ["derive"] }
+humantime = "2.2.0"
+serde_with = "3.12.0"

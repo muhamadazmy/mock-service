@@ -1,49 +1,101 @@
-use std::str::FromStr;
-
-use bytes::Bytes;
+use anyhow::Context;
+use config::{Configuration, StepConfig};
+use mock::{MockHandler, MockService, STEPS};
 use restate_sdk::{
-    discovery::{self, Handler, HandlerName, HandlerType, ServiceName, ServiceType},
+    discovery::{HandlerName, ServiceName},
     prelude::*,
-    service::{Discoverable, Service, ServiceBoxFuture},
 };
-use serde::{Deserialize, Serialize};
-use service::{EchoStep, MockHandler, MockService};
 
 mod config;
-mod service;
-#[restate_sdk::object]
-trait Greet {
-    async fn greet(name: String) -> Result<String, HandlerError>;
+mod mock;
+use clap::Parser;
+use restate_sdk::endpoint::Endpoint;
+use std::{fs::File, io::BufReader, path::PathBuf, str::FromStr};
+
+use crate::mock::Step;
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None, trailing_var_arg = true)]
+struct Args {
+    #[clap(short, long, value_parser)]
+    config_file: PathBuf,
+    #[clap(short, long, value_parser, default_value = "0.0.0.0:9200")]
+    listen_address: String,
 }
 
-struct GreetImpl;
-
-impl Greet for GreetImpl {
-    async fn greet(&self, ctx: ObjectContext<'_>, name: String) -> Result<String, HandlerError> {
-        Ok(format!("Hello, {}!", name))
-    }
+fn step_from_config(step_config: StepConfig) -> anyhow::Result<Box<dyn Step>> {
+    let factory = STEPS
+        .get(step_config.ty.as_str())
+        .with_context(|| format!("Unknown step type: {}", step_config.ty))?;
+    factory
+        .new(step_config.params)
+        .with_context(|| format!("Failed to create step: {}", step_config.ty))
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     // Initialize logging
     tracing_subscriber::fmt::init();
 
-    let mut service = MockService::new("mock-service".try_into().unwrap(), ServiceType::Service);
-    service.add_handler(MockHandler {
-        name: "echo".try_into().unwrap(),
-        steps: vec![EchoStep.into()],
-    });
+    let args = Args::parse();
 
-    //todo:
-    // - Check if using the WofklowContext makes more sense since it
-    // has all required functionality.
-    // - Steps can verify if they are valid in with certain service type.
-    // - Step verification happens during creation of the endpoint (or earlier)
-    // - Build complex services via yaml ? or other means ?
+    tracing::debug!("Loading configuration from: {:?}", args.config_file);
+    let file = File::open(&args.config_file)
+        .with_context(|| format!("Failed to open config file {}", args.config_file.display()))?;
 
-    // Create and start the HTTP server
-    HttpServer::new(service.endpoint().await)
-        .listen_and_serve("0.0.0.0:9200".parse().unwrap())
+    let reader = BufReader::new(file);
+    // Assuming the root of the config YAML is a map of service string keys to service configurations.
+    let config: Configuration =
+        serde_yaml::from_reader(reader).context("Failed to parse config")?;
+
+    let mut endpoint_builder = Endpoint::builder();
+
+    for (service, service_config) in config.services {
+        tracing::debug!(
+            "Setting up service '{service}' of type {:?}",
+            service_config.ty
+        );
+
+        let service_name = ServiceName::from_str(&service)
+            .with_context(|| format!("Invalid service name {service}"))?;
+
+        let mut mock_service = MockService::new(service_name, service_config.ty);
+
+        for (handler_name, handler_config) in service_config.handlers {
+            tracing::info!("Adding handler '{handler_name}'to service '{service}'");
+
+            let mut steps: Vec<Box<dyn Step>> = Vec::new();
+            for (idx, step_cfg) in handler_config.steps.into_iter().enumerate() {
+                // The `?` operator will convert restate_sdk::Error into Box<dyn std::error::Error>
+                steps.push(step_from_config(step_cfg).with_context(|| {
+                    format!("Failed to create step {idx} for handler {handler_name}")
+                })?);
+            }
+
+            let handler_name = HandlerName::from_str(&handler_name)
+                .with_context(|| format!("Invalid handler name {}", handler_name))?;
+
+            mock_service.add_handler(
+                handler_name,
+                MockHandler {
+                    steps,
+                    ty: handler_config.ty,
+                },
+            );
+        }
+
+        // Assuming MockService has an async `bind` method that takes an EndpointBuilder
+        // and returns an EndpointBuilder, consistent with the original code's usage pattern
+        // (`service.bind(endpoint).await.build()`).
+        endpoint_builder = mock_service.bind(endpoint_builder).await;
+    }
+
+    let endpoint = endpoint_builder.build();
+
+    tracing::info!("Starting server on {}", args.listen_address);
+    HttpServer::new(endpoint)
+        .listen_and_serve(args.listen_address.parse()?)
         .await;
+
+    Ok(())
 }
