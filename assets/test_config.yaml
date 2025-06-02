@@ -1,0 +1,21 @@
+counter:
+  name: counter
+  type: SERVICE
+  handlers:
+    increment:
+      name: increment
+      type: EXCLUSIVE
+      steps:
+        - type: sleep
+          params:
+            duration_ms: 100
+        - type: success
+          params:
+            result: 42
+    get_count:
+      name: get_count
+      type: SHARED
+      steps:
+        - type: success
+          params:
+            result: 0

@@ -9,8 +9,8 @@ use restate_sdk::{
 use serde::{Deserialize, Serialize};
 use service::{EchoStep, MockHandler, MockService};
 
+mod config;
 mod service;
-
 #[restate_sdk::object]
 trait Greet {
     async fn greet(name: String) -> Result<String, HandlerError>;

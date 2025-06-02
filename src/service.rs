@@ -136,11 +136,19 @@ impl ExecutionContext {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum StepError {
+    #[error("Invalid service type: {}", .0.to_string())]
+    InvalidServiceType(ServiceType),
+}
+
 #[async_trait::async_trait]
 pub trait Step: Send + Sync + 'static {
+    fn validate(&self, service_type: ServiceType) -> Result<(), StepError>;
+
     async fn run(
         &self,
-        ctx: &ObjectContext<'_>,
+        ctx: &WorkflowContext<'_>,
         step: &mut ExecutionContext,
         input: &JsonValue,
     ) -> Result<(), HandlerError>;
@@ -166,14 +174,16 @@ pub struct EchoStep;
 
 #[async_trait::async_trait]
 impl Step for EchoStep {
+    fn validate(&self, _service_type: ServiceType) -> Result<(), StepError> {
+        Ok(())
+    }
+
     async fn run(
         &self,
-        ctx: &ObjectContext<'_>,
+        _ctx: &WorkflowContext<'_>,
         exec: &mut ExecutionContext,
         input: &JsonValue,
     ) -> Result<(), HandlerError> {
-        ctx.set("test", 100);
-
         exec.return_value(input.clone());
         Ok(())
     }
@@ -182,7 +192,7 @@ impl Step for EchoStep {
 impl MockHandler {
     async fn run(
         &self,
-        ctx: ObjectContext<'_>,
+        ctx: WorkflowContext<'_>,
         input: &JsonValue,
     ) -> Result<JsonValue, HandlerError> {
         let mut exec_ctx = ExecutionContext::default();
