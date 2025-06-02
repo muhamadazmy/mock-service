@@ -20,6 +20,7 @@ pub static STEPS: LazyLock<HashMap<String, Box<dyn StepFactory>>> = LazyLock::ne
     steps.insert("random".to_owned(), Box::new(Random));
     steps.insert("increment".to_owned(), Box::new(Increment));
     steps.insert("call".to_owned(), Box::new(Call));
+    steps.insert("send".to_owned(), Box::new(Send));
     steps.insert("return".to_owned(), Box::new(Return));
 
     steps
@@ -391,6 +392,83 @@ impl Step for CallStep {
         if let Some(output) = self.output.as_ref() {
             exec.set(output, res);
         }
+
+        Ok(())
+    }
+}
+
+struct Send;
+
+impl StepFactory for Send {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+        let step: SendStep = serde_yaml::from_value(params)?;
+        Ok(Box::new(step))
+    }
+}
+
+/// A step that sends a call to another handler, which can be part of any service,
+/// virtual object, or workflow defined within the mock service configuration.
+///
+/// This step allows for complex interactions and chaining of logic across different
+/// components of the mock setup.
+///
+/// Similar to [`CallStep`] but does not wait for output
+#[derive(Debug, Deserialize)]
+struct SendStep {
+    /// Specifies the type of the target handler to be called (SERVICE, VIRTUAL_OBJECT, or WORKFLOW).
+    target_type: ServiceType,
+    /// The string name of the target service, virtual object, or workflow.
+    service: String,
+    /// The string name of the target handler to invoke on the specified service.
+    handler: String,
+    /// The string key to use when `target_type` is `VIRTUAL_OBJECT` or `WORKFLOW`.
+    /// If the current service (caller) is a `VIRTUAL_OBJECT` or `WORKFLOW` and `key` is `None`,
+    /// the key of the current service instance is used.
+    /// Required if `target_type` is `VIRTUAL_OBJECT`/`WORKFLOW` and the caller is `SERVICE`,
+    /// or if a specific key different from the caller's key is needed.
+    key: Option<String>,
+    /// Optional: The name of a variable in the execution context whose value will be sent as input.
+    /// If `None` or the variable doesn't exist, `null` is sent.
+    input: Option<String>,
+}
+
+#[async_trait::async_trait]
+impl Step for SendStep {
+    fn validate(&self, _service_type: ServiceType) -> Result<(), StepError> {
+        Ok(())
+    }
+
+    async fn run(
+        &self,
+        ctx: &WorkflowContext<'_>,
+        exec: &mut ExecutionContext,
+        _input: &JsonValue,
+    ) -> Result<(), HandlerError> {
+        let request_target = match self.target_type {
+            ServiceType::Service => RequestTarget::Service {
+                name: self.service.clone(),
+                handler: self.handler.clone(),
+            },
+            ServiceType::VirtualObject => RequestTarget::Object {
+                name: self.service.clone(),
+                key: self.key.clone().unwrap_or_else(|| ctx.key().to_string()),
+                handler: self.handler.clone(),
+            },
+            ServiceType::Workflow => RequestTarget::Workflow {
+                name: self.service.clone(),
+                key: self.key.clone().unwrap_or_else(|| ctx.key().to_string()),
+                handler: self.handler.clone(),
+            },
+        };
+
+        let req = self
+            .input
+            .as_ref()
+            .and_then(|input| exec.get_variable(input))
+            .cloned()
+            .unwrap_or(Variable::Null);
+
+        ctx.request::<_, ()>(request_target, req).send();
 
         Ok(())
     }

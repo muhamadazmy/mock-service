@@ -144,6 +144,23 @@ Makes a call to another handler, which can be part of any service, virtual objec
     *   `input`: (Optional) The name of a variable existing in the current execution context. The value of this variable will be serialized and sent as the input payload to the target handler. If this parameter is omitted, or if the specified variable does not exist in the context, a `null` value will be sent as input.
     *   `output`: (Optional) The name of a variable in the current execution context. The result returned by the invoked target handler will be deserialized and stored in this variable. If this parameter is omitted, the result of the call is effectively discarded (not stored).
 
+### `send`
+
+Similar to `call` but does not wait for call to complete.
+
+*   **Params**:
+    *   `target_type`: (Required) Specifies the type of the target handler to be called. Must be one of:
+        *   `SERVICE`: For calling a handler on a stateless service.
+        *   `VIRTUAL_OBJECT`: For calling a handler on a keyed virtual object.
+        *   `WORKFLOW`: For calling a handler on a keyed workflow.
+    *   `service`: (Required) The string name of the target service, virtual object, or workflow (as defined in your YAML configuration).
+    *   `handler`: (Required) The string name of the target handler to invoke on the specified `service`.
+    *   `key`: (Optional/Conditionally Required) The string key to use when `target_type` is `VIRTUAL_OBJECT` or `WORKFLOW`.
+        *   If the current service (the one executing this `call` step) is itself a `VIRTUAL_OBJECT` or `WORKFLOW`, and this `key` parameter is omitted in the YAML, the key of the current service instance will automatically be used for the target call.
+        *   This parameter **is required** if `target_type` is `VIRTUAL_OBJECT` or `WORKFLOW` AND the current service (the caller) is of type `SERVICE`. It is also required if you intend to target a specific key different from the current service's key (when calling from a `VIRTUAL_OBJECT` or `WORKFLOW`).
+    *   `input`: (Optional) The name of a variable existing in the current execution context. The value of this variable will be serialized and sent as the input payload to the target handler. If this parameter is omitted, or if the specified variable does not exist in the context, a `null` value will be sent as input.
+
+
 ### `return`
 
 Ends the handler execution and returns the value of a specified variable.
