@@ -23,7 +23,7 @@ impl ExecutionContext {
         self.ret
     }
 
-    pub fn set_variable(&mut self, name: &str, value: impl Into<Variable>) {
+    pub fn set(&mut self, name: &str, value: impl Into<Variable>) {
         self.variables.insert(name.to_owned(), value.into());
     }
 

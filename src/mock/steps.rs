@@ -177,7 +177,7 @@ impl Step for GetStep {
     ) -> Result<(), HandlerError> {
         let value: Variable = ctx.get(&self.key).await?.unwrap_or(Variable::Null);
 
-        exec.set_variable(&self.output, value);
+        exec.set(&self.output, value);
 
         Ok(())
     }
@@ -217,7 +217,7 @@ impl Step for RandomStep {
         let mut rng = rand::rng();
         let bytes: Vec<u8> = (0..self.size).map(|_| rng.random()).collect();
 
-        exec.set_variable(&self.output, bytes);
+        exec.set(&self.output, bytes);
 
         Ok(())
     }
@@ -308,7 +308,7 @@ impl Step for IncrementStep {
 
         value += self.steps;
 
-        exec.set_variable(&self.input, value);
+        exec.set(&self.input, value);
 
         Ok(())
     }
