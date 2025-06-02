@@ -40,6 +40,12 @@ impl Serialize for JsonValue {
     }
 }
 
+impl From<serde_json::Value> for JsonValue {
+    fn from(value: serde_json::Value) -> Self {
+        JsonValue(value)
+    }
+}
+
 /// Represents a configurable mock service that can handle requests based on predefined steps.
 ///
 /// A `MockService` is defined by its name, type (e.g., `SERVICE` or `VIRTUAL_OBJECT`), and a collection of handlers.

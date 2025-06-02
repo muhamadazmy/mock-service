@@ -177,19 +177,3 @@ impl TryFrom<Variable> for Bytes {
         Ok(b)
     }
 }
-
-impl TryFrom<Variable> for JsonValue {
-    type Error = serde_json::Error;
-
-    fn try_from(value: Variable) -> Result<Self, Self::Error> {
-        match value {
-            Variable::String(s) => serde_json::to_value(s),
-            Variable::Integer(i) => serde_json::to_value(i),
-            Variable::Number(n) => serde_json::to_value(n),
-            Variable::Boolean(b) => serde_json::to_value(b),
-            Variable::Bytes(b) => serde_json::to_value(b),
-            Variable::Null => Ok(serde_json::Value::Null),
-        }
-        .map(JsonValue)
-    }
-}

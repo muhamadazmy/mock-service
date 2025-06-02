@@ -7,6 +7,18 @@ echo:
           params:
             duration: 2s
         - type: echo
+    increment:
+      steps:
+        - type: call
+          params:
+            target_type: VIRTUAL_OBJECT
+            service: counter
+            handler: increment
+            key: azmy
+            output: counter
+        - type: return
+          params:
+            output: counter
 random:
   type: VIRTUAL_OBJECT
   handlers:
@@ -35,7 +47,7 @@ random:
 counter:
   type: VIRTUAL_OBJECT
   handlers:
-    counter:
+    increment:
       steps:
         - type: get
           params:
@@ -44,7 +56,7 @@ counter:
         - type: increment
           params:
             input: value
-            steps: 2
+            steps: 1
         - type: set
           params:
             key: counter
