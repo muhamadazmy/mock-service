@@ -64,3 +64,12 @@ counter:
         - type: return
           params:
             output: value
+    get:
+      steps:
+        - type: get
+          params:
+            key: counter
+            output: value
+        - type: return
+          params:
+            output: value
