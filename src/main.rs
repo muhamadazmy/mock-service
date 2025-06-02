@@ -11,6 +11,7 @@ mod mock;
 use clap::Parser;
 use restate_sdk::endpoint::Endpoint;
 use std::{fs::File, io::BufReader, path::PathBuf, str::FromStr};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use crate::mock::Step;
 
@@ -21,6 +22,8 @@ struct Args {
     config_file: PathBuf,
     #[clap(short, long, value_parser, default_value = "0.0.0.0:9200")]
     listen_address: String,
+    #[clap(long, value_parser, default_value = "info")]
+    log_level: String,
 }
 
 fn step_from_config(
@@ -46,10 +49,15 @@ fn step_from_config(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize logging
-    tracing_subscriber::fmt::init();
-
     let args = Args::parse();
+
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(&args.log_level))
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let subscriber = FmtSubscriber::builder().with_env_filter(filter).finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     tracing::debug!("Loading configuration from: {:?}", args.config_file);
     let file = File::open(&args.config_file)
