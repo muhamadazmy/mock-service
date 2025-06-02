@@ -72,7 +72,7 @@ impl restate_sdk::serde::Deserialize for Variable {
     type Error = serde_json::Error;
 
     fn deserialize(bytes: &mut Bytes) -> Result<Self, Self::Error> {
-        serde_json::from_slice(bytes).map_err(From::from)
+        serde_json::from_slice(bytes)
     }
 }
 

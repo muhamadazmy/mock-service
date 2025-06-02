@@ -27,7 +27,7 @@ pub static STEPS: LazyLock<HashMap<String, Box<dyn StepFactory>>> = LazyLock::ne
 struct Echo;
 
 impl StepFactory for Echo {
-    fn new(&self, _params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+    fn create(&self, _params: serde_yaml::Value) -> Result<BoxStep, StepError> {
         Ok(Box::new(EchoStep))
     }
 }
@@ -53,7 +53,7 @@ impl Step for EchoStep {
 struct Sleep;
 
 impl StepFactory for Sleep {
-    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
         let step: SleepStep = serde_yaml::from_value(params)?;
         Ok(Box::new(step))
     }
@@ -87,7 +87,7 @@ impl Step for SleepStep {
 struct Set;
 
 impl StepFactory for Set {
-    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
         let step: SetStep = serde_yaml::from_value(params)?;
         Ok(Box::new(step))
     }
@@ -129,7 +129,7 @@ impl Step for SetStep {
 struct Get;
 
 impl StepFactory for Get {
-    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
         let step: GetStep = serde_yaml::from_value(params)?;
         Ok(Box::new(step))
     }
@@ -168,7 +168,7 @@ impl Step for GetStep {
 struct Random;
 
 impl StepFactory for Random {
-    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
         let step: RandomStep = serde_yaml::from_value(params)?;
         Ok(Box::new(step))
     }
@@ -204,7 +204,7 @@ impl Step for RandomStep {
 struct Return;
 
 impl StepFactory for Return {
-    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
         let step: ReturnStep = serde_yaml::from_value(params)?;
         Ok(Box::new(step))
     }
@@ -240,7 +240,7 @@ impl Step for ReturnStep {
 struct Increment;
 
 impl StepFactory for Increment {
-    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
         let step: IncrementStep = serde_yaml::from_value(params)?;
         Ok(Box::new(step))
     }

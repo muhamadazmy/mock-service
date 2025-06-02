@@ -40,15 +40,15 @@ counter:
         - type: get
           params:
             key: counter
-            output: my_key
+            output: value
         - type: increment
           params:
-            input: my_key
-            steps: 1
+            input: value
+            steps: 2
         - type: set
           params:
             key: counter
-            input: my_key
+            input: value
         - type: return
           params:
-            output: my_key
+            output: value

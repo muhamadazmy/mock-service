@@ -31,7 +31,7 @@ fn step_from_config(
         .get(step_config.ty.as_str())
         .with_context(|| format!("Unknown step type: {}", step_config.ty))?;
     let step = factory
-        .new(step_config.params)
+        .create(step_config.params)
         .with_context(|| format!("Failed to create step: {}", step_config.ty))?;
 
     step.validate(service_type).with_context(|| {

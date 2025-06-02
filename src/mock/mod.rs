@@ -11,7 +11,7 @@ use restate_sdk::{
     service::{Discoverable, Service, ServiceBoxFuture},
 };
 pub use steps::STEPS;
-use tracing::{debug, info};
+use tracing::debug;
 
 mod context;
 mod steps;
@@ -27,7 +27,7 @@ impl Deserialize for JsonValue {
     type Error = serde_json::Error;
 
     fn deserialize(bytes: &mut Bytes) -> Result<Self, Self::Error> {
-        Ok(JsonValue(serde_json::from_slice(&bytes)?))
+        Ok(JsonValue(serde_json::from_slice(bytes)?))
     }
 }
 
@@ -114,10 +114,7 @@ impl Service for MockServiceWrapper {
 
             let (input, metadata) = ctx.input::<JsonValue>().await;
 
-            let res = handler
-                .run((&ctx, metadata).into(), &input)
-                .await
-                .map_err(::restate_sdk::errors::HandlerError::from);
+            let res = handler.run((&ctx, metadata).into(), &input).await;
 
             ctx.handle_handler_result(res);
             ctx.end();
@@ -184,5 +181,5 @@ impl MockHandler {
 }
 
 pub trait StepFactory: Send + Sync + 'static {
-    fn new(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError>;
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError>;
 }
