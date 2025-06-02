@@ -64,7 +64,6 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("Failed to open config file {}", args.config_file.display()))?;
 
     let reader = BufReader::new(file);
-    // Assuming the root of the config YAML is a map of service string keys to service configurations.
     let config: Configuration =
         serde_yaml::from_reader(reader).context("Failed to parse config")?;
 
@@ -106,9 +105,6 @@ async fn main() -> anyhow::Result<()> {
             );
         }
 
-        // Assuming MockService has an async `bind` method that takes an EndpointBuilder
-        // and returns an EndpointBuilder, consistent with the original code's usage pattern
-        // (`service.bind(endpoint).await.build()`).
         endpoint_builder = mock_service.bind(endpoint_builder).await;
     }
 
