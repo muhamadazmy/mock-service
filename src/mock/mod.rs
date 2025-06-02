@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bytes::Bytes;
+use context::ExecutionContext;
 use restate_sdk::{
     discovery::{self, Handler, HandlerName, HandlerType, ServiceName, ServiceType},
     endpoint::Builder,
@@ -11,6 +12,7 @@ use restate_sdk::{
 };
 pub use steps::STEPS;
 
+mod context;
 mod steps;
 
 tokio::task_local! {
@@ -123,21 +125,6 @@ impl Discoverable for MockServiceWrapper {
     }
 }
 
-#[derive(Default)]
-pub struct ExecutionContext {
-    ret: Option<JsonValue>,
-}
-
-impl ExecutionContext {
-    pub fn return_value(&mut self, value: impl Into<JsonValue>) {
-        if self.ret.is_some() {
-            panic!("return_value can only be called once");
-        }
-
-        self.ret = Some(value.into());
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum StepError {
     #[error("Invalid service type: {}", .0.to_string())]
@@ -185,7 +172,7 @@ impl MockHandler {
             step.run(&ctx, &mut exec_ctx, input).await?;
         }
 
-        Ok(exec_ctx.ret.unwrap_or(JsonValue(serde_json::Value::Null)))
+        Ok(exec_ctx.ret().unwrap_or(JsonValue(serde_json::Value::Null)))
     }
 }
 
