@@ -162,6 +162,9 @@ pub enum StepError {
     /// Error indicating invalid parameters were provided for a step.
     #[error("Invalid step parameters: {0}")]
     InvalidStepParameters(#[from] serde_yaml::Error),
+    /// Error indicating that a step type is not known.
+    #[error("Unknown step type: {0}")]
+    UnknownStepType(String),
 }
 
 /// Trait defining the contract for a step in a mock handler's execution flow.

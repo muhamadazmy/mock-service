@@ -6,6 +6,8 @@ use restate_sdk::{context::RequestTarget, discovery::ServiceType, prelude::*};
 use serde::Deserialize;
 use serde_with::serde_as;
 
+use crate::config;
+
 use super::{
     context::Variable, BoxStep, ExecutionContext, JsonValue, Step, StepError, StepFactory,
 };
@@ -22,6 +24,7 @@ pub static STEPS: LazyLock<HashMap<String, Box<dyn StepFactory>>> = LazyLock::ne
     steps.insert("increment".to_owned(), Box::new(Increment));
     steps.insert("call".to_owned(), Box::new(Call));
     steps.insert("send".to_owned(), Box::new(Send));
+    steps.insert("loop".to_owned(), Box::new(Loop));
     steps.insert("return".to_owned(), Box::new(Return));
 
     steps
@@ -534,6 +537,71 @@ impl Step for BusyStep {
         let duration = Duration::from(self.duration) + jitter.unwrap_or_default();
 
         tokio::time::sleep(duration).await;
+
+        Ok(())
+    }
+}
+
+/// Factory for creating `LoopStep` instances.
+struct Loop;
+
+impl StepFactory for Loop {
+    fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError> {
+        let step: LoopStepConfig = serde_yaml::from_value(params)?;
+
+        let mut steps = Vec::new();
+
+        for config in step.steps {
+            let step = STEPS
+                .get(&config.ty)
+                .ok_or(StepError::UnknownStepType(config.ty))?;
+
+            //todo: validate steps against service type
+            steps.push(step.create(config.params)?);
+        }
+
+        Ok(Box::new(LoopStep {
+            count: step.count,
+            steps,
+        }))
+    }
+}
+
+/// Configuration for a `LoopStep` as defined in the YAML.
+#[derive(Debug, Deserialize)]
+struct LoopStepConfig {
+    /// Optional: The number of times to execute the nested steps.
+    /// If `None` or not provided, the loop will run indefinitely (or until `usize::MAX` iterations).
+    count: Option<usize>,
+    /// A list of step configurations that will be executed in each iteration of the loop.
+    steps: Vec<config::StepConfig>,
+}
+
+/// A step that executes a sequence of nested steps repeatedly.
+struct LoopStep {
+    /// The number of times the loop will iterate. `None` means effectively infinite.
+    count: Option<usize>,
+    /// The actual `Step` trait objects for the nested steps to be executed in each iteration.
+    steps: Vec<BoxStep>,
+}
+
+#[async_trait::async_trait]
+impl Step for LoopStep {
+    fn validate(&self, _service_type: ServiceType) -> Result<(), StepError> {
+        Ok(())
+    }
+
+    async fn run(
+        &self,
+        ctx: &WorkflowContext<'_>,
+        exec: &mut ExecutionContext,
+        input: &JsonValue,
+    ) -> Result<(), HandlerError> {
+        for _ in 0..self.count.unwrap_or(usize::MAX) {
+            for step in &self.steps {
+                step.run(ctx, exec, input).await?;
+            }
+        }
 
         Ok(())
     }

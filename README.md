@@ -76,6 +76,8 @@ counter:
             output: value
 ```
 
+> Also check [example.yaml](example.yaml) for a more comprehensive example
+
 ## Available Steps
 
 The following steps can be used in your handler configurations:
@@ -169,6 +171,13 @@ Similar to `call` but does not wait for call to complete.
         *   This parameter **is required** if `target_type` is `VIRTUAL_OBJECT` or `WORKFLOW` AND the current service (the caller) is of type `SERVICE`. It is also required if you intend to target a specific key different from the current service's key (when calling from a `VIRTUAL_OBJECT` or `WORKFLOW`).
     *   `input`: (Optional) The name of a variable existing in the current execution context. The value of this variable will be serialized and sent as the input payload to the target handler. If this parameter is omitted, or if the specified variable does not exist in the context, a `null` value will be sent as input.
 
+### `loop`
+
+Executes a sequence of nested steps repeatedly for a specified number of iterations, or indefinitely.
+
+*   **Params**:
+    *   `count`: (Optional) An integer specifying the number of times to execute the nested `steps`. If omitted, the loop will run indefinitely (technically, up to `usize::MAX` times, which is a very large number).
+    *   `steps`: (Required) A list of step configurations. These steps will be executed in order during each iteration of the loop. The same execution context and input (from the handler's perspective) are passed to these nested steps.
 
 ### `return`
 

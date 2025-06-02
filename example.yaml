@@ -19,6 +19,22 @@ echo:
         - type: return
           params:
             output: counter
+    loop:
+      steps:
+        - type: loop
+          params:
+            count: 10
+            steps:
+              - type: call
+                params:
+                  target_type: VIRTUAL_OBJECT
+                  service: counter
+                  handler: increment
+                  key: azmy
+                  output: counter
+        - type: return
+          params:
+            output: counter
 random:
   type: VIRTUAL_OBJECT
   handlers:

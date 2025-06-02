@@ -13,7 +13,7 @@ use restate_sdk::endpoint::Endpoint;
 use std::{fs::File, io::BufReader, path::PathBuf, str::FromStr};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-use crate::mock::Step;
+use crate::mock::{Step, StepError};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None, trailing_var_arg = true)]
@@ -29,20 +29,14 @@ struct Args {
 fn step_from_config(
     service_type: ServiceType,
     step_config: StepConfig,
-) -> anyhow::Result<Box<dyn Step>> {
+) -> Result<Box<dyn Step>, StepError> {
     let factory = STEPS
         .get(step_config.ty.as_str())
-        .with_context(|| format!("Unknown step type: {}", step_config.ty))?;
-    let step = factory
-        .create(step_config.params)
-        .with_context(|| format!("Failed to create step: {}", step_config.ty))?;
+        .ok_or_else(|| StepError::UnknownStepType(step_config.ty.clone()))?;
 
-    step.validate(service_type).with_context(|| {
-        format!(
-            "Step {} is not valid for service type {:?}",
-            step_config.ty, service_type
-        )
-    })?;
+    let step = factory.create(step_config.params)?;
+
+    step.validate(service_type)?;
 
     Ok(step)
 }
