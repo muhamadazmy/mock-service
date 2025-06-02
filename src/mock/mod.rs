@@ -20,6 +20,7 @@ tokio::task_local! {
     static DISCOVERY_METADATA: discovery::Service;
 }
 
+/// A wrapper around `serde_json::Value` to facilitate its use with Restate SDK's serialization.
 #[derive(Clone)]
 pub struct JsonValue(pub serde_json::Value);
 
@@ -39,6 +40,10 @@ impl Serialize for JsonValue {
     }
 }
 
+/// Represents a configurable mock service that can handle requests based on predefined steps.
+///
+/// A `MockService` is defined by its name, type (e.g., `SERVICE` or `VIRTUAL_OBJECT`), and a collection of handlers.
+/// Each handler, in turn, consists of a sequence of steps that dictate its behavior when invoked.
 pub struct MockService {
     name: ServiceName,
     ty: ServiceType,
@@ -46,6 +51,7 @@ pub struct MockService {
 }
 
 impl MockService {
+    /// Creates a new `MockService` with the given name and type.
     pub fn new(name: ServiceName, ty: ServiceType) -> Self {
         Self {
             name,
@@ -54,10 +60,17 @@ impl MockService {
         }
     }
 
+    /// Adds a handler to the service.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the handler.
+    /// * `handler` - The `MockHandler` definition.
     pub fn add_handler(&mut self, name: HandlerName, handler: MockHandler) {
         self.handlers.insert(name.to_string(), handler);
     }
 
+    /// Generates the service discovery information for this mock service.
     fn service_discovery(&self) -> discovery::Service {
         discovery::Service {
             name: self.name.clone(),
@@ -75,6 +88,9 @@ impl MockService {
         }
     }
 
+    /// Binds this mock service to the Restate endpoint builder.
+    ///
+    /// This method sets up the service with Restate, making its handlers discoverable and callable.
     pub async fn bind(self, endpoint: Builder) -> Builder {
         let discovery = self.service_discovery();
 
@@ -88,6 +104,8 @@ impl MockService {
     }
 }
 
+/// A wrapper around `MockService` to make it compatible with the Restate `Service` trait.
+/// This is used internally for integrating with the Restate SDK.
 #[derive(Clone)]
 struct MockServiceWrapper {
     inner: Arc<MockService>,
@@ -129,18 +147,44 @@ impl Discoverable for MockServiceWrapper {
     }
 }
 
+/// Defines errors that can occur during step creation or validation.
 #[derive(Debug, thiserror::Error)]
 pub enum StepError {
+    /// Error indicating that a step is not valid for the given service type.
     #[error("Invalid service type: {}", .0.to_string())]
     InvalidServiceType(ServiceType),
+    /// Error indicating invalid parameters were provided for a step.
     #[error("Invalid step parameters: {0}")]
     InvalidStepParameters(#[from] serde_yaml::Error),
 }
 
+/// Trait defining the contract for a step in a mock handler's execution flow.
+///
+/// Each step must be able to validate itself against a service type and execute its logic.
 #[async_trait::async_trait]
 pub trait Step: Send + Sync + 'static {
+    /// Validates if the step is appropriate for the given `ServiceType`.
+    ///
+    /// # Arguments
+    ///
+    /// * `service_type` - The type of the service this step belongs to.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if the step is valid, otherwise a `StepError`.
     fn validate(&self, service_type: ServiceType) -> Result<(), StepError>;
 
+    /// Executes the step's logic.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The `WorkflowContext` providing access to Restate features like state and timers.
+    /// * `exec_ctx` - The `ExecutionContext` for the current handler, allowing variables to be set and retrieved.
+    /// * `input` - The input value to the handler.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if execution is successful, otherwise a `HandlerError`.
     async fn run(
         &self,
         ctx: &WorkflowContext<'_>,
@@ -149,6 +193,7 @@ pub trait Step: Send + Sync + 'static {
     ) -> Result<(), HandlerError>;
 }
 
+/// A type alias for a boxed `Step` trait object.
 pub type BoxStep = Box<dyn Step>;
 
 impl<T> From<T> for BoxStep
@@ -160,12 +205,29 @@ where
     }
 }
 
+/// Represents a handler within a `MockService`.
+///
+/// A `MockHandler` contains a sequence of `Step`s that are executed in order when the handler is called.
+/// It also optionally defines the `HandlerType` (e.g., `WORKFLOW`, `UNARY`).
 pub struct MockHandler {
+    /// The sequence of steps to be executed by this handler.
     pub steps: Vec<BoxStep>,
+    /// The type of the handler (e.g., workflow, unary). If `None`, Restate's default is used.
     pub ty: Option<HandlerType>,
 }
 
 impl MockHandler {
+    /// Runs the sequence of steps defined for this handler.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The `WorkflowContext` for the current invocation.
+    /// * `input` - The input `JsonValue` passed to the handler.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the `JsonValue` returned by the handler's execution (often from a `ReturnStep`),
+    /// or a `HandlerError` if any step fails.
     async fn run(
         &self,
         ctx: WorkflowContext<'_>,
@@ -180,6 +242,19 @@ impl MockHandler {
     }
 }
 
+/// Trait for a factory that can create instances of a specific `Step`.
+///
+/// Each step type (e.g., `Echo`, `Sleep`) will have an associated factory.
 pub trait StepFactory: Send + Sync + 'static {
+    /// Creates a new `BoxStep` instance from YAML configuration parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - The YAML value containing the parameters for configuring the step.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the created `BoxStep` or a `StepError` if creation fails
+    /// (e.g., due to invalid parameters).
     fn create(&self, params: serde_yaml::Value) -> Result<BoxStep, StepError>;
 }

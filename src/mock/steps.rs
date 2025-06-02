@@ -24,6 +24,7 @@ pub static STEPS: LazyLock<HashMap<String, Box<dyn StepFactory>>> = LazyLock::ne
     steps
 });
 
+/// Factory for creating `EchoStep` instances.
 struct Echo;
 
 impl StepFactory for Echo {
@@ -31,6 +32,8 @@ impl StepFactory for Echo {
         Ok(Box::new(EchoStep))
     }
 }
+
+/// A step that echoes back the input it receives.
 struct EchoStep;
 
 #[async_trait::async_trait]
@@ -50,6 +53,7 @@ impl Step for EchoStep {
     }
 }
 
+/// Factory for creating `SleepStep` instances.
 struct Sleep;
 
 impl StepFactory for Sleep {
@@ -59,9 +63,11 @@ impl StepFactory for Sleep {
     }
 }
 
+/// A step that pauses execution for a specified duration.
 #[serde_as]
 #[derive(Debug, Deserialize)]
 pub struct SleepStep {
+    /// The duration for which to sleep. Parsed from a human-readable string like "2s" or "500ms".
     #[serde_as(as = "serde_with::DisplayFromStr")]
     duration: humantime::Duration,
 }
@@ -84,6 +90,7 @@ impl Step for SleepStep {
     }
 }
 
+/// Factory for creating `SetStep` instances.
 struct Set;
 
 impl StepFactory for Set {
@@ -93,9 +100,13 @@ impl StepFactory for Set {
     }
 }
 
+/// A step that sets a key-value pair in the Restate state for the current virtual object.
+/// This step is only valid for services of type `VIRTUAL_OBJECT`.
 #[derive(Debug, Deserialize)]
 struct SetStep {
+    /// The string key to store the value under.
     key: String,
+    /// The name of the variable in the execution context whose value will be stored.
     input: String,
 }
 
@@ -126,6 +137,7 @@ impl Step for SetStep {
     }
 }
 
+/// Factory for creating `GetStep` instances.
 struct Get;
 
 impl StepFactory for Get {
@@ -135,9 +147,15 @@ impl StepFactory for Get {
     }
 }
 
+/// A step that retrieves a value from the Restate state for the current virtual object
+/// and stores it in a variable.
+/// This step is only valid for services of type `VIRTUAL_OBJECT`.
 #[derive(Debug, Deserialize)]
 struct GetStep {
+    /// The string key of the value to retrieve.
     key: String,
+    /// The name of the variable in the execution context where the retrieved value will be stored.
+    /// If the key is not found, `null` will be stored in the variable.
     output: String,
 }
 
@@ -165,6 +183,7 @@ impl Step for GetStep {
     }
 }
 
+/// Factory for creating `RandomStep` instances.
 struct Random;
 
 impl StepFactory for Random {
@@ -174,9 +193,12 @@ impl StepFactory for Random {
     }
 }
 
+/// A step that generates a specified number of random bytes and stores them in a variable.
 #[derive(Debug, Deserialize)]
 struct RandomStep {
+    /// The number of random bytes to generate.
     size: u16,
+    /// The name of the variable in the execution context where the byte array will be stored.
     output: String,
 }
 
@@ -201,6 +223,7 @@ impl Step for RandomStep {
     }
 }
 
+/// Factory for creating `ReturnStep` instances.
 struct Return;
 
 impl StepFactory for Return {
@@ -210,8 +233,11 @@ impl StepFactory for Return {
     }
 }
 
+/// A step that ends the handler execution and returns the value of a specified variable.
 #[derive(Debug, Deserialize)]
 struct ReturnStep {
+    /// The name of the variable in the execution context whose value will be returned
+    /// as the result of the handler.
     output: String,
 }
 
@@ -237,6 +263,7 @@ impl Step for ReturnStep {
     }
 }
 
+/// Factory for creating `IncrementStep` instances.
 struct Increment;
 
 impl StepFactory for Increment {
@@ -246,9 +273,14 @@ impl StepFactory for Increment {
     }
 }
 
+/// A step that increments a numerical value stored in a variable.
+/// If the variable doesn't exist or is not a number, it defaults to 0 before incrementing.
 #[derive(Debug, Deserialize)]
 struct IncrementStep {
+    /// The name of the variable in the execution context holding the numerical value to increment.
+    /// The result is stored back in the same variable.
     input: String,
+    /// The integer amount to increment by. Defaults to `1`.
     #[serde(default = "default_steps")]
     steps: isize,
 }
