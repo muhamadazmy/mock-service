@@ -28,6 +28,10 @@ impl Deserialize for JsonValue {
     type Error = serde_json::Error;
 
     fn deserialize(bytes: &mut Bytes) -> Result<Self, Self::Error> {
+        if bytes.is_empty() {
+            return Ok(JsonValue(serde_json::Value::Null));
+        }
+
         Ok(JsonValue(serde_json::from_slice(bytes)?))
     }
 }
